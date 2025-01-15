@@ -1,0 +1,216 @@
+######################################################
+# UrbanAnts: a database of ants in urban environments #
+# by Debora C O Goncalves                             #
+# ui.R and server.R file                              #
+######################################################
+
+#ui
+
+
+library(shiny)
+library(shinydashboard)
+library(DT)
+library(leaflet)
+
+ui <- dashboardPage(
+  skin = "green",
+  
+  
+ # Header
+  dashboardHeader(
+    title = tagList(
+      # Adiciona a imagem do logo
+      tags$img(src = "logo.jpg", height = "48px", width = "auto", style = "padding-right: 30px; margin-right: 0; margin-left: 0;"),
+      tags$span(style = "font-size: 30px; font-weight: bold;", "UrbanAnts")
+    ),
+    titleWidth = 900
+  ),
+  
+  
+  # Sidebar
+  dashboardSidebar(
+    width = 300,
+    sidebarMenu(
+      menuItem("Home", tabName = "home", icon = icon("home")),
+      menuItem("Park Map", tabName = "map", icon = icon("map-pin")),
+      menuItem("Species Table", tabName = "table", icon = icon("table")),
+      menuItem("Species Chart", tabName = "charts", icon = icon("chart-bar")),
+      menuItem("Releases", tabName = "releases", icon = icon("tasks")),
+      HTML(paste0(
+        "<p style='text-align: center;'><small>© - Gonçalves, D. C. O - ",
+        format(Sys.Date(), "%Y"), "</small></p>"
+      ))
+    )
+  ),
+  
+  # Body
+  dashboardBody(
+    tabItems(
+      tabItem(
+        tabName = "home",
+        h2("Welcome to UrbanAnts!"),
+        p(
+          "UrbanAnts is the result of a doctoral research project dedicated to exploring the biodiversity of ants in urban environments.",
+          "This project provides a comprehensive database on species found in urban parks in the city of São Paulo,",
+          "with potential applications in ecological studies, conservation, environmental management, and biotechnological innovations."
+        ),
+        h3("Functionalities:"),
+        p(
+          strong("Park Map:"), " Through this feature, users can explore the location of each park where ants were collected via an interactive map, providing a detailed geographic view of the study areas."
+        ),
+        p(
+          strong("Species Table:"), " This feature presents detailed information about ant diversity in each studied park in a clear and organized manner. Each row corresponds to a species and is structured to facilitate consultation and comparison between different records. The table includes the following data:",
+          tags$ul(
+            tags$li("Country: Indicates the country where the collection was performed."),
+            tags$li("State: Specifies the state or administrative region within the country."),
+            tags$li("Locality: Specifies the detailed location, indicating the name of the park where the collection occurred."),
+            tags$li("Latitude and Longitude: Provides the exact geographic coordinates of the collection point."),
+            tags$li("Collection Date: Records the date the collection was performed."),
+            tags$li("Method: Describes the method used for the collection."),
+            tags$li("Collector: Name of the person or team responsible for the collection."),
+            tags$li("Plot: Identifies the plot or sampling unit where the data was recorded."),
+            tags$li("Pitfall: Indicates the pitfall trap number used in the collection, specifying the identification corresponding to the recorded sample."),
+            tags$li("Sample: Code for the collected sample."),
+            tags$li("Subfamily, Genus, and Species: Detailed taxonomic information of the collected ant."),
+            tags$li("Worker, Soldier, Alate, Queen, and Immature: Quantifies the different types of individuals found in the sample, according to their caste or developmental stage."),
+            tags$li("General Abundance: Provides the total number of individuals recorded in the sample.")
+          )
+        ),
+        p(
+          strong("Species Chart:"), " This feature allows users to visualize charts illustrating the number of subfamilies sampled in each park, enabling comparative analysis across different study areas."
+        ),
+        p(
+          strong("Releases:"), " This feature updates users on new data released on UrbanAnts."
+        )
+      ),
+      tabItem(tabName = "map",
+              leafletOutput("map", height = 600)
+      ),
+      tabItem(tabName = "table",
+              uiOutput("content_tabs") # Dynamic tables
+      ),
+      tabItem(tabName = "charts",
+              uiOutput("chart_tabs") # Dynamic charts
+      ),
+      tabItem(tabName = "releases",
+              h2("Releases")
+      )
+    ),
+    tags$style(type = "text/css",
+               ".shiny-output-error { visibility: hidden; }",
+               ".shiny-output-error:before { visibility: hidden; }"
+    )
+  )
+)
+
+
+
+#sever
+
+library(shiny)
+library(readxl)
+library(DT)
+library(leaflet)
+library(dplyr)
+
+
+  # Server Code
+  server <- function(input, output, session) {
+    
+    # Default Excel file path 
+    excel_file <- "www/UrbanAnts.xlsx"
+    
+    # Initial Excel file reading
+    tabs <- reactive({
+      req(excel_file)
+      excel_sheets(excel_file)
+    })
+    
+    data_tabs <- reactive({
+      req(tabs())
+      valid_tabs <- gsub("[^a-zA-Z0-9]", "_", tabs())
+      lapply(tabs(), function(tab) {
+        read_excel(excel_file, sheet = tab)
+      }) %>% setNames(valid_tabs)
+    })
+    
+    # Render dynamic table content
+    output$content_tabs <- renderUI({
+      req(data_tabs())
+      lapply(names(data_tabs()), function(valid_tab) {
+        tabItem(tabName = valid_tab,
+                h3(paste("Data from tab:", valid_tab)),
+                DTOutput(outputId = paste0("table_", valid_tab))
+        )
+      })
+    })
+    
+    # Generate interactive tables for each tab
+    observe({
+      req(data_tabs())
+      lapply(names(data_tabs()), function(valid_tab) {
+        output[[paste0("table_", valid_tab)]] <- renderDT({
+          datatable(data_tabs()[[valid_tab]], options = list(pageLength = 10))
+        })
+      })
+    })
+    
+    # Render map with parks
+    output$map <- renderLeaflet({
+      leaflet() %>% 
+        addTiles() %>% 
+        setView(lng = -46.633309, lat = -23.550520, zoom = 11) %>% 
+        addMarkers(lng = -46.70226, lat = -23.588194, popup = "Parque Alfredo Volpi") %>% 
+        addMarkers(lng = -46.776173, lat = -23.424597, popup = "Parque Anhanguera") %>% 
+        addMarkers(lng = -46.726994, lat = -23.580788, popup = "Parque Previdência") %>% 
+        addMarkers(lng = -46.468052, lat = -23.566507, popup = "Parque do Carmo – Olavo Egydio Setúbal") %>% 
+        addMarkers(lng = -46.427525, lat = -23.507223, popup = "Parque Ecológico Chico Mendes") %>% 
+        addMarkers(lng = -46.657634, lat = -23.587416, popup = "Parque Ibirapuera") %>% 
+        addMarkers(lng = -46.633309, lat = -23.536229, popup = "Parque Jardim da Luz") %>% 
+        addMarkers(lng = -46.654364, lat = -23.564830, popup = "Parque Tenente Siqueira Campos – Trianon")
+    })
+    
+    # Render dynamic charts
+    output$chart_tabs <- renderUI({
+      req(data_tabs())
+      lapply(names(data_tabs()), function(valid_tab) {
+        tabItem(tabName = valid_tab,
+                h3(paste("Park Chart:", valid_tab)),
+                plotOutput(outputId = paste0("chart_", valid_tab), height = "500px")
+        )
+      })
+    })
+    
+    # Generate charts for each tab
+    observe({
+      req(data_tabs())
+      lapply(names(data_tabs()), function(valid_tab) {
+        output[[paste0("chart_", valid_tab)]] <- renderPlot({
+          data <- data_tabs()[[valid_tab]]
+          
+          # Check if "Subfamily" column exists
+          if ("Subfamily" %in% colnames(data)) {
+            subfamily_count <- data %>% 
+              filter(!is.na(Subfamily)) %>% 
+              group_by(Subfamily) %>% 
+              summarise(Count = n(), .groups = "drop")
+            
+            barplot(
+              subfamily_count$Count,
+              names.arg = subfamily_count$Subfamily,
+              main = paste("Subfamily Distribution - Park", valid_tab),
+              xlab = "Subfamilies",
+              ylab = "Count",
+              col = "black",
+              las = 2,
+              cex.names = 0.8
+            )
+          } else {
+            plot.new()
+            text(0.5, 0.5, "Column 'Subfamily' not found", cex = 1.5)
+          }
+        })
+      })
+    })
+  }
+  
